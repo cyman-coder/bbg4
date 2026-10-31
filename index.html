@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>情緒泡泡射擊遊戲 - 多彩繽紛版</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: "Microsoft JhengHei", "PingFang TC", "Heiti TC", sans-serif;
+            /* 繽紛動態漸變背景 */
+            background: linear-gradient(-45deg, #ff9a9e, #fecfef, #a1c4fd, #c2e9fb);
+            background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* 頂部資訊欄 */
+        #header {
+            width: 100%;
+            max-width: 850px;
+            padding: 12px 20px;
+            background: rgba(255, 255, 255, 0.88);
+            backdrop-filter: blur(10px);
+            border-bottom-left-radius: 20px;
+            border-bottom-right-radius: 20px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+        }
+
+        .info-box {
+            font-size: 1.15rem;
+            font-weight: 800;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .timer-warning {
+            color: #ff3366 !important;
+            animation: pulse 0.8s infinite alternate;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.15); }
+        }
+
+        /* 任務提示區 */
+        #task-bar {
+            margin-top: 10px;
+            padding: 10px 24px;
+            border-radius: 30px;
+            font-size: 1.25rem;
+            font-weight: 900;
+            transition: all 0.4s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .target-negative {
+            background: linear-gradient(135deg, #ff5252, #ff793f);
+            color: white;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+
+        .target-positive {
+            background: linear-gradient(135deg, #2ed573, #10ac84);
+            color: white;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+
+        /* 遊戲區域 */
+        #game-container {
+            position: relative;
+            width: 100%;
+            max-width: 850px;
+            flex: 1;
+            overflow: hidden;
+            cursor: crosshair;
+        }
+
+        /* 特效 Canvas 畫布 */
+        #fx-canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        /* 泡泡基礎樣式 */
+        .bubble {
+            position: absolute;
+            width: 95px;
+            height: 95px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.3rem;
+            font-weight: 900;
+            color: #1e272e;
+            text-shadow: 0 0 6px rgba(255,255,255,0.9);
+            touch-action: manipulation;
+            animation: bubbleFloat 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes bubbleFloat {
+            0% { transform: scale(1) rotate(-3deg); }
+            100% { transform: scale(1.05) rotate(3deg); }
+        }
+
+        /* 自訂射擊游標 */
+        #crosshair {
+            position: fixed;
+            width: 44px;
+            height: 44px;
+            border: 3px dashed #ff5252;
+            border-radius: 50%;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            z-index: 100;
+            display: none;
+            animation: spin 6s linear infinite;
+        }
+        #crosshair::after {
+            content: '';
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 8px; height: 8px;
+            background: currentColor;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        @keyframes spin { 100% { transform: translate(-50%, -50%) rotate(360deg); } }
+
+        /* 彈出視窗 */
+        .modal {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 200;
+            padding: 20px;
+        }
+
+        .modal-content {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 30px;
+            border-radius: 25px;
+            max-width: 520px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.3);
+            animation: popIn 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            border: 3px solid #70a1ff;
+        }
+
+        @keyframes popIn {
+            from { opacity: 0; transform: scale(0.8); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .modal-content h2 {
+            color: #2f3542;
+            font-size: 1.6rem;
+            margin-bottom: 15px;
+        }
+
+        .modal-content p {
+            font-size: 1.15rem;
+            color: #474747;
+            line-height: 1.6;
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #70a1ff, #1e90ff);
+            color: white;
+            border: none;
+            padding: 12px 32px;
+            font-size: 1.25rem;
+            font-weight: 800;
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 6px 15px rgba(30, 144, 255, 0.4);
+            transition: transform 0.15s, box-shadow 0.15s;
+        }
+        .btn:active {
+            transform: scale(0.95);
+        }
+
+        .edu-note {
+            background: #fff9db;
+            border-left: 5px solid #fcc419;
+            padding: 12px;
+            margin-top: 12px;
+            border-radius: 6px;
+            font-size: 1rem;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="crosshair"></div>
+
+    <div id="header">
+        <div class="info-box">關卡: <span id="level-num">1</span> / 3</div>
+        <div class="info-box">⏳ 時間: <span id="timer-num">60</span>s</div>
+        <div class="info-box">⭐ 得分: <span id="score-num">0</span></div>
+        <div class="info-box">🎯 進度: <span id="progress-num">0</span> / 8</div>
+    </div>
+
+    <div id="task-bar" class="target-negative">
+        <span>🎯 當前任務：</span>
+        <span id="task-text">射擊【負面情緒】泡泡！</span>
+    </div>
+
+    <div id="game-container">
+        <canvas id="fx-canvas"></canvas>
+    </div>
+
+    <div id="modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h2 id="modal-title">標題</h2>
+            <div id="modal-body">內容</div>
+            <br>
+            <button id="modal-btn" class="btn" onclick="closeModal()">明白！</button>
+        </div>
+    </div>
+
+    <script>
+        // --- 情緒資料庫（含詳細詞義解釋） ---
+        const NOTE_EMOTIONS = [
+            // 正面情緒 (筆記第3頁)
+            { word: "滿足", type: "positive", desc: "指心願得到實現、心裡感到滿意和充實的感覺。" },
+            { word: "感激", type: "positive", desc: "指因為別人幫助或對你好，而心懷感謝的感受。" },
+            { word: "期待", type: "positive", desc: "指對未來即將發生的美好事情抱有希望與嚮往。" },
+            { word: "欣賞", type: "positive", desc: "指能用讚賞的心態去喜愛、體會人事物的美好。" },
+
+            // 負面情緒 (筆記第3頁)
+            { word: "失望", type: "negative", desc: "指期待的事情沒有實現，心裡感到難過或落空。" },
+            { word: "憤怒", type: "negative", desc: "指遇到不公平或令人生氣的事情時產生的強烈情緒。" },
+            { word: "緊張", type: "negative", desc: "指面對未知、考驗或壓力時，身體與精神感到焦慮不安。" },
+            { word: "害怕", type: "negative", desc: "指遇到危險或讓人擔心的事物時產生的恐懼感受。" }
+        ];
+
+        const EXTRA_EMOTIONS = [
+            // 延伸情緒 (第3關)
+            { word: "興奮", type: "positive", desc: "指情緒非常高漲、極度快樂和歡欣的感覺。" },
+            { word: "喜悅", type: "positive", desc: "指內心感到無比歡樂和高興的感受。" },
+            { word: "焦慮", type: "negative", desc: "指對未發生的事情過度擔心、心神不寧。" },
+            { word: "孤單", type: "negative", desc: "指感到自己是一個人、缺乏陪伴或關懷的孤獨感受。" }
+        ];
+
+        // 繽紛泡泡色彩組合庫 (高飽和鮮豔漸變)
+        const BUBBLE_COLORS = [
+            { bg: "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.95), rgba(255, 107, 129, 0.6) 40%, rgba(255, 71, 87, 0.85) 100%)", shadow: "0 8px 20px rgba(255, 71, 87, 0.4)" }, // 櫻花紅
+            { bg: "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.95), rgba(84, 160, 255, 0.6) 40%, rgba(46, 134, 222, 0.85) 100%)", shadow: "0 8px 20px rgba(46, 134, 222, 0.4)" }, // 湛藍
+            { bg: "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.95), rgba(29, 209, 161, 0.6) 40%, rgba(16, 172, 132, 0.85) 100%)", shadow: "0 8px 20px rgba(16, 172, 132, 0.4)" }, // 蒂芙尼綠
+            { bg: "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.95), rgba(254, 202, 87, 0.6) 40%, rgba(255, 159, 24, 0.85) 100%)", shadow: "0 8px 20px rgba(255, 159, 24, 0.4)" }, // 暖陽橙
+            { bg: "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.95), rgba(200, 214, 229, 0.6) 40%, rgba(95, 39, 205, 0.85) 100%)", shadow: "0 8px 20px rgba(95, 39, 205, 0.4)" }, // 炫彩紫
+            { bg: "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.95), rgba(255, 159, 243, 0.6) 40%, rgba(243, 104, 224, 0.85) 100%)", shadow: "0 8px 20px rgba(243, 104, 224, 0.4)" }, // 夢幻粉
+            { bg: "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.95), rgba(0, 210, 211, 0.6) 40%, rgba(1, 163, 164, 0.85) 100%)", shadow: "0 8px 20px rgba(1, 163, 164, 0.4)" }  // 薄荷青
+        ];
+
+        const RELIEF_METHODS = ["唱歌", "做運動", "睡覺", "找人傾訴"];
+
+        // --- 遊戲狀態 ---
+        let currentLevel = 1;
+        let score = 0;
+        let levelProgress = 0;
+        const TARGET_PROGRESS = 8;
+        let currentTargetType = "negative";
+        let activeBubbles = [];
+        let gameInterval = null;
+        let timerInterval = null;
+        let colorSwitchTimeout = null;
+        let timeLeft = 60;
+        let isGamePaused = false;
+
+        const container = document.getElementById("game-container");
+        const crosshair = document.getElementById("crosshair");
+        const canvas = document.getElementById("fx-canvas");
+        const ctx = canvas.getContext("2d");
+
+        function resizeCanvas() {
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // --- 視覺粒子系統 (爆破與衝擊波特效) ---
+        let particles = [];
+
+        function createExplosion(x, y, color) {
+            const particleCount = 28;
+            for (let i = 0; i < particleCount; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 7 + 2;
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    size: Math.random() * 8 + 4,
+                    color: color || `hsl(${Math.random() * 360}, 100%, 65%)`,
+                    alpha: 1,
+                    decay: Math.random() * 0.03 + 0.015
+                });
+            }
+        }
+
+        function createShockwave(x, y) {
+            particles.push({
+                x: x,
+                y: y,
+                type: 'wave',
+                radius: 10,
+                maxRadius: 55,
+                alpha: 1,
+                decay: 0.05
+            });
+        }
+
+        function updateAndDrawParticles() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                if (p.type === 'wave') {
+                    p.radius += 3.5;
+                    p.alpha -= p.decay;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                    ctx.strokeStyle = `rgba(255, 255, 255, ${p.alpha})`;
+                    ctx.lineWidth = 4;
+                    ctx.stroke();
+                    if (p.alpha <= 0) particles.splice(i, 1);
+                } else {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.vy += 0.12;
+                    p.alpha -= p.decay;
+
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                    ctx.fillStyle = p.color;
+                    ctx.globalAlpha = Math.max(0, p.alpha);
+                    ctx.fill();
+                    ctx.globalAlpha = 1;
+
+                    if (p.alpha <= 0) particles.splice(i, 1);
+                }
+            }
+            requestAnimationFrame(updateAndDrawParticles);
+        }
+        requestAnimationFrame(updateAndDrawParticles);
+
+        // --- 音效系統 ---
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        let audioCtx = null;
+
+        function playSound(type) {
+            if (!audioCtx) audioCtx = new AudioCtx();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            if (type === 'pop') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(500, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(950, audioCtx.currentTime + 0.12);
+                gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.12);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.12);
+            } else if (type === 'wrong') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(220, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(140, audioCtx.currentTime + 0.25);
+                gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.25);
+            } else if (type === 'warn') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.15);
+            }
+        }
+
+        // --- 游標控制 ---
+        window.addEventListener('mousemove', (e) => {
+            crosshair.style.display = 'block';
+            crosshair.style.left = e.clientX + 'px';
+            crosshair.style.top = e.clientY + 'px';
+        });
+
+        // --- 關卡與時間控制 ---
+        function initGame() {
+            showModal(
+                "歡迎來到情緒泡泡射擊遊戲！",
+                "<p>這是一個專為辨認情緒設計的趣味小遊戲。</p>" +
+                "<div class='edu-note'><b>💡 常識科提醒：</b><br>感到負面情緒（如憤怒、緊張、害怕）是非常正常的現象喔！射擊泡泡是辨認練習，<b>不代表要消滅情緒</b>！[cite: 4]</div>",
+                "開始第一關",
+                startLevel1
+            );
+        }
+
+        function startLevel1() {
+            currentLevel = 1;
+            score = 0;
+            levelProgress = 0;
+            currentTargetType = "negative";
+            updateUI();
+            setTaskUI("negative", "第一關：限時60秒，請射擊【負面情緒】！");
+            startSpawningBubbles();
+            startTimer(60);
+        }
+
+        function startLevel2() {
+            currentLevel = 2;
+            levelProgress = 0;
+            updateUI();
+            showModal(
+                "進入第二關！",
+                "<p>這一關的瞄準游標會<b>隨機變色轉換任務</b>：<br>" +
+                "🔴 <b>紅色時</b>：射擊【負面情緒】<br>" +
+                "🟢 <b>綠色時</b>：射擊【正面情緒】<br>" +
+                "每次轉色前會有預警提示，請保持專注！</p>",
+                "開始第二關",
+                () => {
+                    setTargetType("negative");
+                    startSpawningBubbles();
+                    startTimer(60);
+                    scheduleColorSwitch();
+                }
+            );
+        }
+
+        function startLevel3() {
+            currentLevel = 3;
+            levelProgress = 0;
+            updateUI();
+            showModal(
+                "進入第三關：終極考驗！",
+                "<p>延續變色規則！加入筆記以外更豐富的情緒詞彙（如興奮、喜悅、焦慮、孤單），準備好挑戰了嗎？</p>",
+                "開始第三關",
+                () => {
+                    setTargetType("negative");
+                    startSpawningBubbles();
+                    startTimer(60);
+                    scheduleColorSwitch();
+                }
+            );
+        }
+
+        function startTimer(seconds) {
+            clearInterval(timerInterval);
+            timeLeft = seconds;
+            document.getElementById("timer-num").innerText = timeLeft;
+            document.getElementById("timer-num").parentElement.classList.remove("timer-warning");
+
+            timerInterval = setInterval(() => {
+                if (!isGamePaused) {
+                    timeLeft--;
+                    document.getElementById("timer-num").innerText = timeLeft;
+
+                    if (timeLeft <= 10) {
+                        document.getElementById("timer-num").parentElement.classList.add("timer-warning");
+                    }
+
+                    if (timeLeft <= 0) {
+                        clearInterval(timerInterval);
+                        onTimeOut();
+                    }
+                }
+            }, 1000);
+        }
+
+        function onTimeOut() {
+            pauseGame();
+            playSound('wrong');
+            showModal(
+                "⏰ 時間到！",
+                `<p>很可惜，時間內未完成 8 次目標。別灰心，再試一次吧！</p>`,
+                "重新開始本關",
+                () => {
+                    if (currentLevel === 1) startLevel1();
+                    else if (currentLevel === 2) startLevel2();
+                    else startLevel3();
+                }
+            );
+        }
+
+        function setTargetType(type) {
+            currentTargetType = type;
+            const taskBar = document.getElementById("task-bar");
+            const taskText = document.getElementById("task-text");
+
+            if (type === "negative") {
+                taskBar.className = "target-negative";
+                taskText.innerText = "射擊【負面情緒】泡泡！";
+                crosshair.style.borderColor = "#ff5252";
+                crosshair.style.color = "#ff5252";
+            } else {
+                taskBar.className = "target-positive";
+                taskText.innerText = "射擊【正面情緒】泡泡！";
+                crosshair.style.borderColor = "#2ed573";
+                crosshair.style.color = "#2ed573";
+            }
+        }
+
+        function setTaskUI(type, text) {
+            setTargetType(type);
+            document.getElementById("task-text").innerText = text;
+        }
+
+        function scheduleColorSwitch() {
+            if (isGamePaused || (currentLevel !== 2 && currentLevel !== 3)) return;
+
+            const nextTime = Math.floor(Math.random() * 4000) + 4000;
+            colorSwitchTimeout = setTimeout(() => {
+                if (isGamePaused) return;
+
+                playSound('warn');
+                const nextType = currentTargetType === "negative" ? "positive" : "negative";
+                const typeText = nextType === "negative" ? "負面情緒 (紅色)" : "正面情緒 (綠色)";
+
+                document.getElementById("task-text").innerText = `⚠️ 準備轉色！即將射擊【${typeText}】`;
+
+                setTimeout(() => {
+                    if (!isGamePaused) {
+                        setTargetType(nextType);
+                        scheduleColorSwitch();
+                    }
+                }, 1500);
+
+            }, nextTime);
+        }
+
+        // --- 泡泡生成與動態賦色 ---
+        function startSpawningBubbles() {
+            clearAllBubbles();
+            isGamePaused = false;
+            gameInterval = setInterval(spawnBubble, 1100);
+        }
+
+        function spawnBubble() {
+            if (isGamePaused) return;
+
+            let pool = [...NOTE_EMOTIONS];
+            if (currentLevel === 3) {
+                pool = pool.concat(EXTRA_EMOTIONS);
+            }
+
+            const emotion = pool[Math.floor(Math.random() * pool.length)];
+
+            // 隨機選擇泡泡顏色組合
+            const randomColor = BUBBLE_COLORS[Math.floor(Math.random() * BUBBLE_COLORS.length)];
+
+            const bubble = document.createElement("div");
+            bubble.className = "bubble";
+            bubble.innerText = emotion.word;
+            bubble.dataset.type = emotion.type;
+            bubble.dataset.word = emotion.word;
+            bubble.dataset.desc = emotion.desc;
+
+            // 套用隨機配色
+            bubble.style.background = randomColor.bg;
+            bubble.style.boxShadow = `inset -5px -5px 15px rgba(255, 255, 255, 0.8), inset 5px 5px 15px rgba(255,255,255,0.4), ${randomColor.shadow}`;
+
+            const containerWidth = container.clientWidth;
+            const startX = Math.random() * (containerWidth - 110) + 55;
+            let currentY = container.clientHeight + 60;
+            const speed = Math.random() * 1.3 + 0.9;
+
+            bubble.style.left = startX + "px";
+            bubble.style.top = currentY + "px";
+
+            const handleHit = (e) => {
+                e.stopPropagation();
+                const rect = container.getBoundingClientRect();
+                const clickX = (e.clientX || (e.touches && e.touches[0].clientX)) - rect.left;
+                const clickY = (e.clientY || (e.touches && e.touches[0].clientY)) - rect.top;
+                onBubbleHit(bubble, clickX, clickY);
+            };
+
+            bubble.addEventListener("mousedown", handleHit);
+            bubble.addEventListener("touchstart", (e) => {
+                e.preventDefault();
+                handleHit(e);
+            });
+
+            container.appendChild(bubble);
+            activeBubbles.push({ element: bubble, y: currentY, speed: speed });
+        }
+
+        function animateBubbles() {
+            if (!isGamePaused) {
+                for (let i = activeBubbles.length - 1; i >= 0; i--) {
+                    const b = activeBubbles[i];
+                    b.y -= b.speed;
+                    b.element.style.top = b.y + "px";
+
+                    if (b.y < -110) {
+                        b.element.remove();
+                        activeBubbles.splice(i, 1);
+                    }
+                }
+            }
+            requestAnimationFrame(animateBubbles);
+        }
+        requestAnimationFrame(animateBubbles);
+
+        // --- 點擊與判定機制 ---
+        function onBubbleHit(bubbleEl, clickX, clickY) {
+            if (isGamePaused) return;
+
+            const emotionType = bubbleEl.dataset.type;
+            const emotionWord = bubbleEl.dataset.word;
+            const emotionDesc = bubbleEl.dataset.desc;
+
+            // 特效：畫布粒子爆破與衝擊波
+            createShockwave(clickX, clickY);
+            const color = emotionType === 'positive' ? '#2ed573' : '#ff5252';
+            createExplosion(clickX, clickY, color);
+
+            bubbleEl.remove();
+
+            if (emotionType === currentTargetType) {
+                // 答對
+                playSound('pop');
+                score += 10;
+                levelProgress += 1;
+                updateUI();
+
+                if (levelProgress >= TARGET_PROGRESS) {
+                    onLevelComplete();
+                }
+            } else {
+                // 答錯：扣 1 分（最低扣至 0 分），暫停倒數並對話框詳細解釋
+                playSound('wrong');
+                score = Math.max(0, score - 1);
+                updateUI();
+                pauseGame();
+
+                const typeLabel = emotionType === "positive" ? "正面情緒" : "負面情緒";
+                let explanation = `<p>⚠️ <b>誤射提示：</b>「<b>${emotionWord}</b>」屬於<b>${typeLabel}</b>！<br><br>`;
+                explanation += `📖 <b>詞義解釋：</b>${emotionDesc}<br><br>`;
+
+                if (emotionType === "negative") {
+                    explanation += `💡 <b>筆記小知識：</b>當感到「${emotionWord}」時，可以用筆記學過的正確方法舒緩：<b>${RELIEF_METHODS.join('、')}</b>[cite: 4]。</p>`;
+                } else {
+                    explanation += `💡 <b>筆記小知識：</b>正面情緒會帶給我們高興與滿足[cite: 4]，但也要記得任何情緒都是合理的喔！</p>`;
+                }
+
+                showModal("情緒詞義解析", explanation, "繼續挑戰", resumeGame);
+            }
+        }
+
+        // --- 關卡結算 ---
+        function onLevelComplete() {
+            pauseGame();
+            clearInterval(timerInterval);
+            if (currentLevel === 1) {
+                showModal("🎉 順利通過第一關！", "<p>太棒了！你完美辨認了筆記中的負面情緒！準備好挑戰隨機變色的第二關了嗎？</p>", "進入第二關", startLevel2);
+            } else if (currentLevel === 2) {
+                showModal("🌟 成功過關第二關！", "<p>你的反應相當敏捷！接下來要加入更多延伸的情緒詞彙囉！</p>", "進入第三關", startLevel3);
+            } else {
+                showModal(
+                    "🏆 恭喜成為情緒大師！",
+                    `<p>你順利完成了所有關卡！<br>最終總得分：<b>${score} 分</b>！<br><br>` +
+                    "<b>❤️ 常識科提醒：</b>日常生活中要多留意自己的情緒變化，需要時記得找家人或老師傾訴喔！[cite: 4]</p>",
+                    "再玩一次",
+                    startLevel1
+                );
+            }
+        }
+
+        function updateUI() {
+            document.getElementById("level-num").innerText = currentLevel;
+            document.getElementById("score-num").innerText = score;
+            document.getElementById("progress-num").innerText = levelProgress;
+        }
+
+        function clearAllBubbles() {
+            container.querySelectorAll('.bubble').forEach(b => b.remove());
+            activeBubbles = [];
+        }
+
+        function pauseGame() {
+            isGamePaused = true;
+            if (colorSwitchTimeout) clearTimeout(colorSwitchTimeout);
+        }
+
+        function resumeGame() {
+            isGamePaused = false;
+            if (currentLevel === 2 || currentLevel === 3) {
+                scheduleColorSwitch();
+            }
+        }
+
+        function showModal(title, bodyHtml, btnText, callback) {
+            document.getElementById("modal-title").innerHTML = title;
+            document.getElementById("modal-body").innerHTML = bodyHtml;
+            const btn = document.getElementById("modal-btn");
+            btn.innerText = btnText;
+            btn.onclick = () => {
+                closeModal();
+                if (callback) callback();
+            };
+            document.getElementById("modal").style.display = "flex";
+        }
+
+        function closeModal() {
+            document.getElementById("modal").style.display = "none";
+        }
+
+        window.onload = initGame;
+    </script>
+</body>
+</html>
